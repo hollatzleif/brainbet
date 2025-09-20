@@ -11,7 +11,7 @@ app = FastAPI()
 # Router registrieren
 app.include_router(auth.router)
 
-# Healthcheck-Route hinzufügen
+# Healthcheck-Route
 @app.get("/api/health", response_class=PlainTextResponse)
 def health():
     return "ok"
