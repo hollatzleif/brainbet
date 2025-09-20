@@ -12,8 +12,9 @@ function Login() {
     setMessage("");
 
     const url = isSignup
-      ? "https://your-backend.onrender.com/auth/signup"
-      : "https://your-backend.onrender.com/auth/login";
+  ? "https://brainbet-4jx2.onrender.com/auth/signup"
+  : "https://brainbet-4jx2.onrender.com/auth/login";
+
 
     const payload = isSignup
       ? { username, email, password }
