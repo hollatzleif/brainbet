@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
 from .database import Base, engine
 from .routers import auth
 
@@ -9,3 +10,8 @@ app = FastAPI()
 
 # Router registrieren
 app.include_router(auth.router)
+
+# Healthcheck-Route hinzufügen
+@app.get("/api/health", response_class=PlainTextResponse)
+def health():
+    return "ok"
