@@ -11,36 +11,49 @@ function Login() {
     e.preventDefault();
     setMessage("");
 
-    const endpoint = isSignup
-      ? `https://dein-backend.onrender.com/auth/signup?username=${username}&email=${email}&password=${password}`
-      : `https://dein-backend.onrender.com/auth/login?email=${email}&password=${password}`;
+    const url = isSignup
+      ? "https://your-backend.onrender.com/auth/signup"
+      : "https://your-backend.onrender.com/auth/login";
 
-    const res = await fetch(endpoint, { method: "POST" });
-    const data = await res.json();
+    const payload = isSignup
+      ? { username, email, password }
+      : { email, password };
 
-    if (!res.ok) {
-      setMessage(data.detail || "Fehler beim Login/Signup");
-    } else {
-      setMessage(isSignup ? data.message : "Login erfolgreich!");
-      if (!isSignup) {
-        alert("Token: " + data.access_token);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage(data.detail || "An error occurred.");
+      } else {
+        setMessage(isSignup ? data.message : "Login successful!");
+        if (!isSignup) {
+          alert("Your token: " + data.access_token);
+        }
       }
+    } catch (error) {
+      setMessage("Network error. Please try again.");
     }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-20 border p-4 rounded">
-      <h2 className="text-xl font-bold mb-4">
+    <div className="max-w-md mx-auto mt-20 border p-4 rounded bg-white shadow">
+      <h2 className="text-xl font-bold mb-4 text-center">
         {isSignup ? "Sign Up" : "Login"}
       </h2>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
         {isSignup && (
           <input
             type="text"
-            placeholder="Benutzername"
+            placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="border p-2"
+            className="border p-2 rounded"
             required
           />
         )}
@@ -49,15 +62,15 @@ function Login() {
           placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="border p-2"
+          className="border p-2 rounded"
           required
         />
         <input
           type="password"
-          placeholder="Passwort"
+          placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="border p-2"
+          className="border p-2 rounded"
           required
         />
         <button
@@ -68,15 +81,15 @@ function Login() {
         </button>
       </form>
       <p className="mt-4 text-sm text-center">
-        {isSignup ? "Schon registriert?" : "Noch keinen Account?"}{" "}
+        {isSignup ? "Already have an account?" : "Don't have an account yet?"}{" "}
         <button
           onClick={() => setIsSignup(!isSignup)}
           className="text-blue-500 underline"
         >
-          {isSignup ? "Hier einloggen" : "Hier registrieren"}
+          {isSignup ? "Log in here" : "Sign up here"}
         </button>
       </p>
-      {message && <p className="mt-4 text-red-500 text-center">{message}</p>}
+      {message && <p className="mt-4 text-center text-red-500">{message}</p>}
     </div>
   );
 }

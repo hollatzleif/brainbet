@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from jose import jwt
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 
 from .. import models, database
 
@@ -11,13 +12,24 @@ router = APIRouter(
     tags=["Auth"]
 )
 
-# Passwort Hashing
+# Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# JWT Settings
-SECRET_KEY = "mein_geheimes_token"  # später als ENV-Variable setzen!
+# JWT settings
+SECRET_KEY = "your_secret_key_here"  # Replace later with environment variable
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+
+class SignupRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
 
 def hash_password(password: str):
@@ -38,30 +50,30 @@ def create_access_token(data: dict):
 # ---------- ROUTES ----------
 
 @router.post("/signup")
-def signup(username: str, email: str, password: str, db: Session = Depends(database.get_db)):
-    # E-Mail prüfen
-    if db.query(models.User).filter(models.User.email == email).first():
-        raise HTTPException(status_code=400, detail="Email bereits registriert, bitte einloggen.")
+def signup(request: SignupRequest, db: Session = Depends(database.get_db)):
+    # Check if email exists
+    if db.query(models.User).filter(models.User.email == request.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered. Please log in.")
 
-    # Username prüfen
-    if db.query(models.User).filter(models.User.username == username).first():
-        raise HTTPException(status_code=400, detail="Benutzername bereits vergeben.")
+    # Check if username exists
+    if db.query(models.User).filter(models.User.username == request.username).first():
+        raise HTTPException(status_code=400, detail="Username already taken.")
 
-    hashed_pw = hash_password(password)
-    new_user = models.User(username=username, email=email, hashed_password=hashed_pw)
+    hashed_pw = hash_password(request.password)
+    new_user = models.User(username=request.username, email=request.email, hashed_password=hashed_pw)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    return {"message": "User erfolgreich erstellt. Bitte einloggen."}
+    return {"message": "User successfully created. Please log in."}
 
 
 @router.post("/login")
-def login(email: str, password: str, db: Session = Depends(database.get_db)):
-    user = db.query(models.User).filter(models.User.email == email).first()
+def login(request: LoginRequest, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.email == request.email).first()
     if not user:
-        raise HTTPException(status_code=400, detail="Email nicht gefunden. Bitte registrieren.")
-    if not verify_password(password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Passwort stimmt nicht.")
+        raise HTTPException(status_code=400, detail="Email not found. Please sign up.")
+    if not verify_password(request.password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect password.")
 
     token = create_access_token({"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
