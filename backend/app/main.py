@@ -29,15 +29,3 @@ app.include_router(auth.router)
 def health():
     return "ok"
 
-# ---------- TEMPORARY RESET ROUTE ----------
-@app.get("/api/reset-users")
-def reset_users():
-    """
-    TEMPORARY: Drops the users table so SQLAlchemy can recreate it
-    with the correct structure.
-    """
-    with engine.connect() as conn:
-        conn.execute(text("DROP TABLE IF EXISTS users CASCADE;"))
-        conn.commit()
-    return {"message": "Users table dropped. Restart the server now."}
-# -------------------------------------------
