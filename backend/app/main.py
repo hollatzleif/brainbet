@@ -4,6 +4,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import Base, engine
 from .routers import auth
 
+from sqlalchemy import text
+from .database import engine
+
+@app.get("/api/reset-users")
+def reset_users():
+    """
+    TEMPORARY: Drops the users table so SQLAlchemy can recreate it with the correct structure.
+    """
+    with engine.connect() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS users CASCADE;"))
+        conn.commit()
+    return {"message": "Users table dropped. Restart the server now."}
+
+
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
