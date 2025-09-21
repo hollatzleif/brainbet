@@ -11,8 +11,30 @@ export default function Login() {
   const [message, setMessage] = useState("");
   const [token, setToken] = useState(() => localStorage.getItem("access_token"));
 
+  // profile for signed-in state
+  const [me, setMe] = useState(null);
+
+  async function fetchMe() {
+    const t = localStorage.getItem("access_token");
+    if (!t) { setMe(null); return; }
+    try {
+      const res = await fetch(`${API_BASE}/users/me`, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (!res.ok) throw new Error("unauth");
+      const data = await res.json();
+      setMe(data);
+    } catch (e) {
+      setMe(null);
+    }
+  }
+
   useEffect(() => {
-    const onStorage = () => setToken(localStorage.getItem("access_token"));
+    fetchMe();
+    const onStorage = () => {
+      setToken(localStorage.getItem("access_token"));
+      fetchMe();
+    };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
@@ -20,6 +42,7 @@ export default function Login() {
   const logout = () => {
     localStorage.removeItem("access_token");
     setToken(null);
+    setMe(null);
     window.dispatchEvent(new Event("storage"));
   };
 
@@ -52,6 +75,7 @@ export default function Login() {
           localStorage.setItem("access_token", data.access_token);
           setToken(data.access_token);
           setMessage("");
+          fetchMe();
         } else {
           throw new Error("No access token returned");
         }
@@ -65,8 +89,20 @@ export default function Login() {
     return (
       <div className="w-full max-w-md p-6 rounded-xl bg-white shadow flex items-center justify-between gap-4">
         <div>
-          <p className="font-medium">Signed in</p>
-          <p className="text-sm text-gray-500">You can use the timer now.</p>
+          <p className="font-medium">
+            {me ? (
+              <>
+                Signed in as <span className="font-semibold">{me.username}</span>
+                {" · "}
+                <span title="Your balance">{Number(me.coins).toFixed(2)} Coins</span>
+                {" · "}
+                Level {me.level} (x{Number(me.multiplier).toFixed(1)})
+              </>
+            ) : (
+              "Signed in"
+            )}
+          </p>
+          {!me && <p className="text-sm text-gray-500">Loading your profile…</p>}
         </div>
         <button
           onClick={logout}

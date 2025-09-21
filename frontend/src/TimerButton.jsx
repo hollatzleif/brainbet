@@ -1,10 +1,9 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 const API_BASE = "https://brainbet-4jx2.onrender.com";
 
 function getToken() {
-  // try common keys
   return (
     localStorage.getItem("access_token") ||
     localStorage.getItem("token") ||
@@ -21,81 +20,16 @@ function formatSeconds(s) {
 
 export default function TimerButton() {
   const [status, setStatus] = useState("stopped");
-  const [audioCtx, setAudioCtx] = useState(null);
-  const [checkTimer, setCheckTimer] = useState(null);
   const [elapsed, setElapsed] = useState(0);
-  const [startIso, setStartIso] = useState(null);
 
-
-  function requestAudioCtx() {
-    if (!audioCtx) {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        setAudioCtx(ctx);
-        return ctx;
-      } catch (e) { return null; }
-    }
-    return audioCtx;
-  }
-
-  function beep(durationMs=250, freq=880) {
-    const ctx = requestAudioCtx();
-    if (!ctx) return;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'sine'; o.frequency.value = freq;
-    o.connect(g); g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.03, ctx.currentTime); // subtle
-    o.start();
-    o.stop(ctx.currentTime + durationMs/1000);
-  }
-
-  async function ensureNotifPermission() {
-    if (!('Notification' in window)) return false;
-    if (Notification.permission === 'granted') return true;
-    if (Notification.permission !== 'denied') {
-      const res = await Notification.requestPermission();
-      return res === 'granted';
-    }
-    return false;
-  }
-
-  async function scheduleRandomCheck() {
-    // testing: 60-120s; later adjust to 5-45 min
-    if (status !== 'running') return;
-    const delay = Math.floor(60 + Math.random()*60) * 1000;
-    const id = setTimeout(triggerCheck, delay);
-    setCheckTimer(id);
-  }
-
-  async function triggerCheck() {
-    if (status !== 'running') return;
-    const token = getToken();
-    if (!token) return;
-    // register check with backend (2-minute window)
-    try {
-      await fetch(`${API_BASE}/timers/check/start`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-    } catch {}
-    const ok = await ensureNotifPermission();
-    if (ok) {
-      try {
-        const n = new Notification('Attention check', { body: 'Please confirm within 2 minutes to keep this session.', silent: false });
-        beep(200, 880);
-        n.onclick = async () => {
-          window.focus();
-          try { await fetch(`${API_BASE}/timers/check/confirm`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch {}
-          n.close();
-          scheduleRandomCheck();
-        };
-      } catch (e) {
-        // fallback sound
-        beep(200, 880);
-      }
-    } else {
-      // No permission: fallback sound and rely on on-page controls
-      beep(200, 880);
-    }
-  }
+  // inactivity attention check (frontend)
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [confirmCountdown, setConfirmCountdown] = useState(120);
+  const inactivityMsRef = useRef(0);
+  const lastActivityRef = useRef(Date.now());
+  const checkActiveRef = useRef(false);
+  const countdownIntervalRef = useRef(null);
+  const confirmTimeoutRef = useRef(null);
 
   async function fetchStatus() {
     const token = getToken();
@@ -116,7 +50,6 @@ export default function TimerButton() {
     const data = await res.json();
     setStatus(data.status);
     setElapsed(data.elapsed_seconds || 0);
-    setStartIso(data.start_time);
   }
 
   useEffect(() => {
@@ -131,7 +64,7 @@ export default function TimerButton() {
       const ok = window.confirm("Are you sure that you want to end your training session?");
       if (!ok) return;
     }
-    // handle timer actions and show popup on stop
+
     const token = getToken();
     if (!token) {
       setStatus("unauth");
@@ -162,26 +95,115 @@ export default function TimerButton() {
       alert(lines.join("\n"));
       // reset UI state to zeroed timer and keep it zero even if status polling runs
       setStatus("stopped");
-      if (checkTimer) clearTimeout(checkTimer);
+      clearCheckTimers();
       setElapsed(0);
-      setStartIso(null);
       return;
     }
     if (path === "start") {
       // we start fresh or resume; set UI to reasonable initial state
       setStatus("running");
-      requestAudioCtx();
-      // schedule first random attention check
-      setTimeout(scheduleRandomCheck, 500);
+      resetInactivity();
       // on resume, backend has elapsed; fetch a fresh status shortly
       setTimeout(fetchStatus, 50);
       return;
     }
     // pause
     setStatus("paused");
-    if (checkTimer) clearTimeout(checkTimer);
+    clearCheckTimers();
     setTimeout(fetchStatus, 50);
   }
+
+  // ---- Inactivity detection ----
+  function resetInactivity() {
+    lastActivityRef.current = Date.now();
+    inactivityMsRef.current = 0;
+  }
+
+  function clearCheckTimers() {
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    if (confirmTimeoutRef.current) {
+      clearTimeout(confirmTimeoutRef.current);
+      confirmTimeoutRef.current = null;
+    }
+    checkActiveRef.current = false;
+    setIsModalOpen(false);
+    setConfirmCountdown(120);
+  }
+
+  async function startAttentionCheck() {
+    const token = getToken();
+    if (!token) return;
+    try {
+      await fetch(`${API_BASE}/timers/check/start?window_seconds=120`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {}
+    // open modal
+    checkActiveRef.current = true;
+    setIsModalOpen(true);
+    setConfirmCountdown(120);
+    countdownIntervalRef.current = setInterval(() => {
+      setConfirmCountdown((x) => (x > 0 ? x - 1 : 0));
+    }, 1000);
+    confirmTimeoutRef.current = setTimeout(async () => {
+      // time elapsed, backend will mark session invalid on confirm or stop
+      checkActiveRef.current = false;
+      setIsModalOpen(false);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+      // Optional: inform user the session is at risk; we keep timer running as requested
+      alert("Attention check timed out. This session will yield 0 Coins unless restarted.");
+    }, 120000);
+  }
+
+  async function confirmAttentionCheck() {
+    const token = getToken();
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/timers/check/confirm`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      // If invalidated already (late), tell user
+      if (data && data.invalidated) {
+        alert("Too late – this session has been invalidated and will yield 0 Coins.");
+      }
+    } catch {}
+    clearCheckTimers();
+    resetInactivity();
+  }
+
+  useEffect(() => {
+    // events counting as activity
+    const mark = () => {
+      lastActivityRef.current = Date.now();
+    };
+    const events = ["mousemove", "keydown", "scroll", "touchstart", "click"];
+    events.forEach((evt) => window.addEventListener(evt, mark, { passive: true }));
+    return () => {
+      events.forEach((evt) => window.removeEventListener(evt, mark));
+    };
+  }, []);
+
+  useEffect(() => {
+    // check inactivity every 5s
+    const interval = setInterval(() => {
+      if (status !== "running") return;
+      const now = Date.now();
+      const inactiveMs = now - lastActivityRef.current;
+      // Testing threshold: 60s (you'll change to 15 * 60 * 1000 later)
+      const thresholdMs = 60 * 1000;
+      if (!checkActiveRef.current && inactiveMs >= thresholdMs) {
+        startAttentionCheck();
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [status]);
 
   // live ticking if running
   useEffect(() => {
@@ -190,18 +212,49 @@ export default function TimerButton() {
       id = setInterval(() => {
         setElapsed((e) => e + 1);
       }, 1000);
-      // ensure a check gets scheduled if none
-      setTimeout(scheduleRandomCheck, 1000);
     }
     return () => clearInterval(id);
   }, [status]);
 
   return (
-    <div className="flex flex-col items-center gap-3 p-4 rounded-xl shadow bg-white">
+    <div className="flex flex-col items-start gap-3 p-4 rounded-xl shadow bg-white">
+      {/* Inactivity modal */}
+      {isModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "grid",
+            placeItems: "center",
+            zIndex: 50,
+          }}
+        >
+          <div style={{ background: "white", padding: 20, borderRadius: 12, maxWidth: 480 }}>
+            <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Still there?</h3>
+            <p style={{ marginBottom: 12 }}>
+              Hey. We noticed you haven't used your device for 15 minutes (cause thats what I will be changing it to later on).
+              Please confirm, that you are still learning.
+            </p>
+            <p style={{ marginBottom: 16, fontFamily: "monospace" }}>
+              Time left to confirm: {confirmCountdown}s
+            </p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={confirmAttentionCheck}
+                className="px-4 py-2 rounded bg-emerald-600 text-white"
+              >
+                I'm still learning
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="text-2xl font-mono">{formatSeconds(elapsed)}</div>
       {status === "unauth" ? (
         <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={() => alert("Please sign in first.")}>
-          Einloggen erforderlich
+          Sign in required
         </button>
       ) : status === "running" ? (
         <div className="flex gap-2">
@@ -215,7 +268,7 @@ export default function TimerButton() {
       ) : status === "paused" ? (
         <div className="flex gap-2">
           <button className="px-4 py-2 rounded bg-emerald-600 text-white" onClick={() => action("start")}>
-            Fortsetzen
+            Resume
           </button>
           <button className="px-4 py-2 rounded bg-rose-600 text-white" onClick={() => action("stop")}>
             Stop
