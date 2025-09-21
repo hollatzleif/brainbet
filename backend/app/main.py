@@ -1,47 +1,40 @@
+
 from fastapi import FastAPI
-from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
-from .database import Base, engine
-from .routers import auth, timers, users
+from .database import engine, Base, get_db
+from .routers import auth, users, timers
 
-# Create database tables
-Base.metadata.create_all(bind=engine)
+app = FastAPI(title="brainbet")
 
-# Initialize FastAPI app
-app = FastAPI()
-
-app.include_router(auth.router)
-app.include_router(timers.router)
-app.include_router(users.router)
-
-# ---------- CORS CONFIGURATION ----------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Temporarily allow all origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# ---------------------------------------
 
-# Register routers
 app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(timers.router)
 
-# Health check route
-@app.get("/api/health", response_class=PlainTextResponse)
-def health():
-    return "ok"
+@app.get("/")
+def root():
+    return {"status": "ok"}
 
-
-# --- lightweight startup migration for timers attention-check columns ---
+# --- lightweight startup migrations ---
 @app.on_event("startup")
-def _auto_migrate_attention_checks():
+def _auto_migrate_columns():
     try:
         with engine.begin() as conn:
+            # attention check columns (safe if already exist)
             conn.execute(text("ALTER TABLE timers ADD COLUMN IF NOT EXISTS pending_check_started_at TIMESTAMPTZ"))
             conn.execute(text("ALTER TABLE timers ADD COLUMN IF NOT EXISTS pending_check_deadline TIMESTAMPTZ"))
             conn.execute(text("ALTER TABLE timers ADD COLUMN IF NOT EXISTS invalidated BOOLEAN NOT NULL DEFAULT FALSE"))
+            # countdown columns
+            conn.execute(text("ALTER TABLE timers ADD COLUMN IF NOT EXISTS target_seconds INTEGER"))
+            conn.execute(text("ALTER TABLE timers ADD COLUMN IF NOT EXISTS end_time TIMESTAMPTZ"))
+            conn.execute(text("ALTER TABLE timers ADD COLUMN IF NOT EXISTS remaining_seconds INTEGER"))
     except Exception as e:
-        # Don't crash app on migration issues; logs on Render will show the error
         print("Startup migration warning:", e)
