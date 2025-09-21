@@ -81,10 +81,10 @@ export default function TimerButton() {
       const mult = data.multiplier ?? 1.0;
       const earned = data.earned_coins ?? (baseCoins * mult);
       const lines = [
-        `${mins} minutes of learning = ${baseCoins} Coins`,
+        `${mins} minutes of learning = ${Math.floor(baseCoins)} Coins`,
         `Level ${level} = ${Number(mult).toFixed(1)} Multiplier`,
-        `${baseCoins} x ${Number(mult).toFixed(1)} = ${Number(earned).toFixed(1)}`,
-        `Summary of Training session: ${formatSeconds(secs)} min, ${Number(earned).toFixed(1)} Coins.`
+        `${Math.floor(baseCoins)} x ${Number(mult).toFixed(1)} = ${Number(earned).toFixed(2)}`,
+        `Summary of training session: ${formatSeconds(secs)} min, ${Number(earned).toFixed(2)} Coins.`
       ];
       alert(lines.join("\n"));
       // reset UI state to zeroed timer and keep it zero even if status polling runs

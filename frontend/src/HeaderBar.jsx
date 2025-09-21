@@ -37,7 +37,7 @@ export default function HeaderBar() {
     <div className="fixed top-4 right-4 px-3 py-2 rounded-lg bg-white shadow text-sm">
       <div className="font-medium">{me.username}</div>
       <div className="text-gray-600">Level {me.level} (x{Number(me.multiplier).toFixed(1)})</div>
-      <div className="text-gray-800 font-medium">{Number(me.coins).toFixed(1)} Coins</div>
+      <div className="text-gray-800 font-medium">{Number(me.coins).toFixed(2)} Coins</div>
     </div>
   );
 }
