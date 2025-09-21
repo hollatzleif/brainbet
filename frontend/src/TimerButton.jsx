@@ -50,6 +50,7 @@ export default function TimerButton() {
   }, []);
 
   async function action(path) {
+    // handle timer actions and show popup on stop
     const token = getToken();
     if (!token) {
       alert("Bitte logge dich ein.");
@@ -60,10 +61,29 @@ export default function TimerButton() {
       headers: { Authorization: `Bearer ${token}` },
     });
     const data = await res.json();
-    await fetchStatus();
     if (!res.ok) {
       alert(data.detail || "Fehler");
+      return;
     }
+    if (path === "stop") {
+      const secs = typeof data.elapsed_seconds === "number" ? data.elapsed_seconds : 0;
+      alert(`Timer beendet – Dauer: ${formatSeconds(secs)}`);
+      // reset UI state to zeroed timer
+      setStatus("stopped");
+      setElapsed(0);
+      setStartIso(null);
+      return;
+    }
+    if (path === "start") {
+      // we start fresh or resume; set UI to reasonable initial state
+      setStatus("running");
+      // on resume, backend has elapsed; fetch a fresh status shortly
+      setTimeout(fetchStatus, 50);
+      return;
+    }
+    // pause
+    setStatus("paused");
+    setTimeout(fetchStatus, 50);
   }
 
   // live ticking if running
