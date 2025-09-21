@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from jose import jwt
 
 from .. import models, database
@@ -84,12 +84,15 @@ def start_timer(db: Session = Depends(database.get_db), email: str = Depends(get
     if paused:
         paused.status = "running"
         paused.start_time = now_utc()
+        paused.invalidated = False
+        paused.pending_check_started_at = None
+        paused.pending_check_deadline = None
         db.add(paused)
         db.commit()
         db.refresh(paused)
         return {'message': 'Timer resumed', 'status': 'running'}
     # else create new
-    timer = models.Timer(user_id=user.id, status="running", start_time=now_utc(), elapsed_seconds=0)
+    timer = models.Timer(user_id=user.id, status="running", start_time=now_utc(), elapsed_seconds=0, invalidated=False, pending_check_started_at=None, pending_check_deadline=None)
     db.add(timer)
     db.commit()
     db.refresh(timer)
@@ -139,3 +142,33 @@ def stop_timer(db: Session = Depends(database.get_db), email: str = Depends(get_
     db.add(timer)
     db.commit()
     return {'message': 'Timer stopped', 'status': 'stopped', 'elapsed_seconds': timer.elapsed_seconds}
+
+
+@router.post("/check/start")
+def start_attention_check(window_seconds: int = 120, db: Session = Depends(database.get_db), email: str = Depends(utils.get_current_user_email)):
+    user = utils.get_user_by_email(db, email)
+    timer = db.query(models.Timer).filter(models.Timer.user_id==user.id, models.Timer.status=="running").first()
+    if not timer:
+        raise HTTPException(status_code=400, detail="No running timer")
+    started = now_utc()
+    timer.pending_check_started_at = started
+    timer.pending_check_deadline = started + timedelta(seconds=int(window_seconds))
+    db.add(timer); db.commit()
+    return {'message': 'check_started', 'deadline': timer.pending_check_deadline.isoformat()}
+
+@router.post("/check/confirm")
+def confirm_attention_check(db: Session = Depends(database.get_db), email: str = Depends(utils.get_current_user_email)):
+    user = utils.get_user_by_email(db, email)
+    timer = db.query(models.Timer).filter(models.Timer.user_id==user.id, models.Timer.status=="running").first()
+    if not timer:
+        raise HTTPException(status_code=400, detail="No running timer")
+    now = now_utc()
+    if timer.pending_check_deadline and now <= timer.pending_check_deadline:
+        # success -> clear pending
+        timer.pending_check_started_at = None
+        timer.pending_check_deadline = None
+    else:
+        # missed -> invalidate entire session
+        timer.invalidated = True
+    db.add(timer); db.commit()
+    return {'message': 'check_confirmed', 'invalidated': bool(timer.invalidated)}

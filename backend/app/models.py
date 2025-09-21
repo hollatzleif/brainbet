@@ -40,3 +40,11 @@ class UserWallet(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False, unique=True)
     coins = Column(Float, nullable=False, default=0.0)
+
+
+from sqlalchemy import Boolean
+
+# extend Timer with attention-check state
+setattr(Timer, "pending_check_started_at", Column(DateTime, nullable=True))
+setattr(Timer, "pending_check_deadline", Column(DateTime, nullable=True))
+setattr(Timer, "invalidated", Column(Boolean, nullable=False, default=False))

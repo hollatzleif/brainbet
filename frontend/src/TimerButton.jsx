@@ -21,8 +21,81 @@ function formatSeconds(s) {
 
 export default function TimerButton() {
   const [status, setStatus] = useState("stopped");
+  const [audioCtx, setAudioCtx] = useState(null);
+  const [checkTimer, setCheckTimer] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [startIso, setStartIso] = useState(null);
+
+
+  function requestAudioCtx() {
+    if (!audioCtx) {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        setAudioCtx(ctx);
+        return ctx;
+      } catch (e) { return null; }
+    }
+    return audioCtx;
+  }
+
+  function beep(durationMs=250, freq=880) {
+    const ctx = requestAudioCtx();
+    if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.03, ctx.currentTime); // subtle
+    o.start();
+    o.stop(ctx.currentTime + durationMs/1000);
+  }
+
+  async function ensureNotifPermission() {
+    if (!('Notification' in window)) return false;
+    if (Notification.permission === 'granted') return true;
+    if (Notification.permission !== 'denied') {
+      const res = await Notification.requestPermission();
+      return res === 'granted';
+    }
+    return false;
+  }
+
+  async function scheduleRandomCheck() {
+    // testing: 60-120s; later adjust to 5-45 min
+    if (status !== 'running') return;
+    const delay = Math.floor(60 + Math.random()*60) * 1000;
+    const id = setTimeout(triggerCheck, delay);
+    setCheckTimer(id);
+  }
+
+  async function triggerCheck() {
+    if (status !== 'running') return;
+    const token = getToken();
+    if (!token) return;
+    // register check with backend (2-minute window)
+    try {
+      await fetch(`${API_BASE}/timers/check/start`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    } catch {}
+    const ok = await ensureNotifPermission();
+    if (ok) {
+      try {
+        const n = new Notification('Attention check', { body: 'Please confirm within 2 minutes to keep this session.', silent: false });
+        beep(200, 880);
+        n.onclick = async () => {
+          window.focus();
+          try { await fetch(`${API_BASE}/timers/check/confirm`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch {}
+          n.close();
+          scheduleRandomCheck();
+        };
+      } catch (e) {
+        // fallback sound
+        beep(200, 880);
+      }
+    } else {
+      // No permission: fallback sound and rely on on-page controls
+      beep(200, 880);
+    }
+  }
 
   async function fetchStatus() {
     const token = getToken();
@@ -89,6 +162,7 @@ export default function TimerButton() {
       alert(lines.join("\n"));
       // reset UI state to zeroed timer and keep it zero even if status polling runs
       setStatus("stopped");
+      if (checkTimer) clearTimeout(checkTimer);
       setElapsed(0);
       setStartIso(null);
       return;
@@ -96,12 +170,16 @@ export default function TimerButton() {
     if (path === "start") {
       // we start fresh or resume; set UI to reasonable initial state
       setStatus("running");
+      requestAudioCtx();
+      // schedule first random attention check
+      setTimeout(scheduleRandomCheck, 500);
       // on resume, backend has elapsed; fetch a fresh status shortly
       setTimeout(fetchStatus, 50);
       return;
     }
     // pause
     setStatus("paused");
+    if (checkTimer) clearTimeout(checkTimer);
     setTimeout(fetchStatus, 50);
   }
 
@@ -112,6 +190,8 @@ export default function TimerButton() {
       id = setInterval(() => {
         setElapsed((e) => e + 1);
       }, 1000);
+      // ensure a check gets scheduled if none
+      setTimeout(scheduleRandomCheck, 1000);
     }
     return () => clearInterval(id);
   }, [status]);
