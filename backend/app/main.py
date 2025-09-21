@@ -3,7 +3,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from .database import Base, engine
-from .routers import auth, timers
+from .routers import auth, timers, users
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -13,6 +13,7 @@ app = FastAPI()
 
 app.include_router(auth.router)
 app.include_router(timers.router)
+app.include_router(users.router)
 
 # ---------- CORS CONFIGURATION ----------
 app.add_middleware(

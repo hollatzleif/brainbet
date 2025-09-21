@@ -50,6 +50,11 @@ export default function TimerButton() {
   }, []);
 
   async function action(path) {
+    // confirm before stopping
+    if (path === "stop") {
+      const ok = window.confirm("Are you sure, that you want to end your training session?");
+      if (!ok) return;
+    }
     // handle timer actions and show popup on stop
     const token = getToken();
     if (!token) {
@@ -67,8 +72,19 @@ export default function TimerButton() {
     }
     if (path === "stop") {
       const secs = typeof data.elapsed_seconds === "number" ? data.elapsed_seconds : 0;
-      alert(`Timer beendet – Dauer: ${formatSeconds(secs)}`);
-      // reset UI state to zeroed timer
+      const mins = Math.floor(secs/60);
+      const baseCoins = data.base_coins ?? Math.floor(secs/180);
+      const level = data.level ?? 1;
+      const mult = data.multiplier ?? 1.0;
+      const earned = data.earned_coins ?? (baseCoins * mult);
+      const lines = [
+        `${mins} minutes of learning = ${baseCoins} Coins`,
+        `Level ${level} = ${Number(mult).toFixed(1)} Multiplier`,
+        `${baseCoins} x ${Number(mult).toFixed(1)} = ${Number(earned).toFixed(1)}`,
+        `Summary of Training session: ${formatSeconds(secs)} min, ${Number(earned).toFixed(1)} Coins.`
+      ];
+      alert(lines.join("\n"));
+      // reset UI state to zeroed timer and keep it zero even if status polling runs
       setStatus("stopped");
       setElapsed(0);
       setStartIso(null);

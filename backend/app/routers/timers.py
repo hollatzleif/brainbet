@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from jose import jwt
 
 from .. import models, database
+from .. import utils
 
 router = APIRouter(prefix="/timers", tags=["Timers"])
 
@@ -43,7 +44,7 @@ def my_timer(db: Session = Depends(database.get_db), email: str = Depends(get_cu
         .first()
     )
     if not timer:
-        return {'status': 'stopped', 'elapsed_seconds': 0, 'start_time': None}
+        return {'status': 'stopped', 'elapsed_seconds': 0, 'start_time': None, 'last_session_seconds': 0}
     # compute live elapsed if running
     elapsed = timer.elapsed_seconds
     if timer.status == "running" and timer.start_time:
@@ -53,9 +54,12 @@ def my_timer(db: Session = Depends(database.get_db), email: str = Depends(get_cu
             # treat naive as UTC
             start = start.replace(tzinfo=timezone.utc)
         elapsed += int((now_utc() - start).total_seconds())
+    # If timer is stopped, UI should reset to 0. Keep last session for optional UI display.
+    ui_elapsed = 0 if timer.status == 'stopped' else elapsed
     return {
         'status': timer.status,
-        'elapsed_seconds': elapsed,
+        'elapsed_seconds': ui_elapsed,
+        'last_session_seconds': elapsed,
         'start_time': timer.start_time.isoformat() if timer.start_time else None
     }
 

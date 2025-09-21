@@ -24,3 +24,19 @@ class Timer(Base):
     status = Column(String, nullable=False, default="stopped")  # running | paused | stopped
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+# --- User level & wallet models ---
+from sqlalchemy import ForeignKey, Float
+
+class UserLevel(Base):
+    __tablename__ = "user_levels"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False, unique=True)
+    level = Column(Integer, nullable=False, default=1)
+
+class UserWallet(Base):
+    __tablename__ = "user_wallets"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False, unique=True)
+    coins = Column(Float, nullable=False, default=0.0)
