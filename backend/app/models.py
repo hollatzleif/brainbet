@@ -17,10 +17,10 @@ class User(Base):
     created_at = Column(DateTime, default=utcnow)
 
     timers = relationship("Timer", back_populates="user", cascade="all, delete-orphan")
-    wallet = relationship("Wallet", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    wallet = relationship("UserWallet", back_populates="user", uselist=False, cascade="all, delete-orphan")
     level = relationship("UserLevel", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
-class Wallet(Base):
+class UserWallet(Base):
     __tablename__ = "wallets"
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
@@ -46,14 +46,14 @@ class Timer(Base):
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
-    # Optional attention-check fields (added via startup migrations)
+    # Optional attention-check fields (may be created via migrations)
     pending_check_started_at = Column(DateTime, nullable=True)
     pending_check_deadline = Column(DateTime, nullable=True)
     invalidated = Column(Boolean, default=False, nullable=False)
 
-    # Optional countdown fields (added via startup migrations)
+    # Optional countdown fields (may be created via migrations)
     target_seconds = Column(Integer, nullable=True)
-    end_time = Column(DateTime, nullable=True)           # stored in UTC
+    end_time = Column(DateTime, nullable=True)           # stored as UTC
     remaining_seconds = Column(Integer, nullable=True)
 
     user = relationship("User", back_populates="timers")
