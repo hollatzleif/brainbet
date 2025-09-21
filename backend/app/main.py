@@ -23,16 +23,26 @@ app.include_router(timers.router)
 def root():
     return {"status": "ok"}
 
-# idempotent startup migrations (no model changes required)
+# Idempotent, lightweight startup migrations for columns referenced by ORM/routers
 @app.on_event("startup")
 def _auto_migrate_columns():
     try:
         with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE IF EXISTS timers ADD COLUMN IF NOT EXISTS pending_check_started_at TIMESTAMPTZ"))
-            conn.execute(text("ALTER TABLE IF EXISTS timers ADD COLUMN IF NOT EXISTS pending_check_deadline TIMESTAMPTZ"))
-            conn.execute(text("ALTER TABLE IF EXISTS timers ADD COLUMN IF NOT EXISTS invalidated BOOLEAN NOT NULL DEFAULT FALSE"))
-            conn.execute(text("ALTER TABLE IF EXISTS timers ADD COLUMN IF NOT EXISTS target_seconds INTEGER"))
-            conn.execute(text("ALTER TABLE IF EXISTS timers ADD COLUMN IF NOT EXISTS end_time TIMESTAMPTZ"))
-            conn.execute(text("ALTER TABLE IF EXISTS timers ADD COLUMN IF NOT EXISTS remaining_seconds INTEGER"))
+            # Users: ensure created_at exists (ORM selects it)
+            conn.execute(text("ALTER TABLE IF NOT EXISTS users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()"))
+
+            # Wallets: ensure coins column exists (display with 2 decimals in UI; DB type can stay numeric/float)
+            conn.execute(text("ALTER TABLE IF NOT EXISTS wallets ADD COLUMN IF NOT EXISTS coins DOUBLE PRECISION DEFAULT 0"))
+
+            # User levels: ensure level column exists
+            conn.execute(text("ALTER TABLE IF NOT EXISTS user_levels ADD COLUMN IF NOT EXISTS level INTEGER DEFAULT 1"))
+
+            # Timers: attention-check + countdown columns
+            conn.execute(text("ALTER TABLE IF NOT EXISTS timers ADD COLUMN IF NOT EXISTS pending_check_started_at TIMESTAMPTZ"))
+            conn.execute(text("ALTER TABLE IF NOT EXISTS timers ADD COLUMN IF NOT EXISTS pending_check_deadline TIMESTAMPTZ"))
+            conn.execute(text("ALTER TABLE IF NOT EXISTS timers ADD COLUMN IF NOT EXISTS invalidated BOOLEAN NOT NULL DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE IF NOT EXISTS timers ADD COLUMN IF NOT EXISTS target_seconds INTEGER"))
+            conn.execute(text("ALTER TABLE IF NOT EXISTS timers ADD COLUMN IF NOT EXISTS end_time TIMESTAMPTZ"))
+            conn.execute(text("ALTER TABLE IF NOT EXISTS timers ADD COLUMN IF NOT EXISTS remaining_seconds INTEGER"))
     except Exception as e:
         print("Startup migration warning:", e)
