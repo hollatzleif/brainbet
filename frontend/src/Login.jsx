@@ -1,86 +1,120 @@
-import { useState } from "react";
 
-function Login() {
+import { useEffect, useState } from "react";
+
+const API_BASE = "https://brainbet-4jx2.onrender.com";
+
+export default function Login() {
   const [isSignup, setIsSignup] = useState(false);
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const [token, setToken] = useState(() => localStorage.getItem("access_token"));
+
+  useEffect(() => {
+    const onStorage = () => setToken(localStorage.getItem("access_token"));
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const logout = () => {
+    localStorage.removeItem("access_token");
+    setToken(null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
 
-    const url = isSignup
-  ? "https://brainbet-4jx2.onrender.com/auth/signup"
-  : "https://brainbet-4jx2.onrender.com/auth/login";
-
-
-    const payload = isSignup
-      ? { username, email, password }
-      : { email, password };
-
     try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setMessage(data.detail || "An error occurred.");
+      if (isSignup) {
+        const res = await fetch(`${API_BASE}/auth/signup`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Signup failed");
+        setMessage("Signup successful. Please log in.");
+        setIsSignup(false);
+        return;
       } else {
-        setMessage(isSignup ? data.message : "Login successful!");
-        if (!isSignup) {
-          alert("Your token: " + data.access_token);
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Login failed");
+
+        if (data && data.access_token) {
+          localStorage.setItem("access_token", data.access_token);
+          setToken(data.access_token);
+          setMessage("");
+        } else {
+          throw new Error("No access token returned");
         }
       }
-    } catch (error) {
-      setMessage("Network error. Please try again.");
+    } catch (err) {
+      setMessage(err.message);
     }
   };
 
+  if (token) {
+    return (
+      <div className="w-full max-w-md p-6 rounded-xl bg-white shadow flex items-center justify-between gap-4">
+        <div>
+          <p className="font-medium">Angemeldet</p>
+          <p className="text-sm text-gray-500">Du kannst jetzt den Timer benutzen.</p>
+        </div>
+        <button
+          onClick={logout}
+          className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300"
+        >
+          Logout
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-md mx-auto mt-20 border p-4 rounded bg-white shadow">
-      <h2 className="text-xl font-bold mb-4 text-center">
-        {isSignup ? "Sign Up" : "Login"}
-      </h2>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <div className="w-full max-w-md p-6 rounded-xl bg-white shadow">
+      <h1 className="text-2xl font-semibold mb-4">{isSignup ? "Sign up" : "Log in"}</h1>
+      <form onSubmit={handleSubmit} className="space-y-3">
         {isSignup && (
           <input
             type="text"
             placeholder="Username"
+            className="w-full border rounded px-3 py-2"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="border p-2 rounded"
             required
           />
         )}
         <input
           type="email"
           placeholder="Email"
+          className="w-full border rounded px-3 py-2"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="border p-2 rounded"
           required
         />
         <input
           type="password"
           placeholder="Password"
+          className="w-full border rounded px-3 py-2"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="border p-2 rounded"
           required
         />
         <button
           type="submit"
-          className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+          className="w-full py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
         >
-          {isSignup ? "Sign Up" : "Login"}
+          {isSignup ? "Create account" : "Log in"}
         </button>
       </form>
+
       <p className="mt-4 text-sm text-center">
         {isSignup ? "Already have an account?" : "Don't have an account yet?"}{" "}
         <button
@@ -94,5 +128,3 @@ function Login() {
     </div>
   );
 }
-
-export default Login;
