@@ -36,7 +36,7 @@ export default function Login() {
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Signup failed");
-        setMessage("Signup successful. Please log in.");
+        setMessage("Signup successful. Please sign in.");
         setIsSignup(false);
         return;
       } else {
@@ -65,14 +65,14 @@ export default function Login() {
     return (
       <div className="w-full max-w-md p-6 rounded-xl bg-white shadow flex items-center justify-between gap-4">
         <div>
-          <p className="font-medium">Angemeldet</p>
-          <p className="text-sm text-gray-500">Du kannst jetzt den Timer benutzen.</p>
+          <p className="font-medium">Signed in</p>
+          <p className="text-sm text-gray-500">You can use the timer now.</p>
         </div>
         <button
           onClick={logout}
           className="px-3 py-2 rounded bg-gray-200 hover:bg-gray-300"
         >
-          Logout
+          Log out
         </button>
       </div>
     );

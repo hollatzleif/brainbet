@@ -55,7 +55,7 @@ export default function TimerButton() {
   async function action(path) {
     // confirm before stopping
     if (path === "stop") {
-      const ok = window.confirm("Are you sure, that you want to end your training session?");
+      const ok = window.confirm("Are you sure that you want to end your training session?");
       if (!ok) return;
     }
     // handle timer actions and show popup on stop
@@ -70,7 +70,7 @@ export default function TimerButton() {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.detail || "Fehler");
+      alert(data.detail || "Error");
       return;
     }
     if (path === "stop") {
@@ -120,7 +120,7 @@ export default function TimerButton() {
     <div className="flex flex-col items-center gap-3 p-4 rounded-xl shadow bg-white">
       <div className="text-2xl font-mono">{formatSeconds(elapsed)}</div>
       {status === "unauth" ? (
-        <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={() => alert("Bitte zuerst einloggen.")}>
+        <button className="px-4 py-2 rounded bg-blue-600 text-white" onClick={() => alert("Please sign in first.")}>
           Einloggen erforderlich
         </button>
       ) : status === "running" ? (
@@ -143,7 +143,7 @@ export default function TimerButton() {
         </div>
       ) : (
         <button className="px-4 py-2 rounded bg-emerald-600 text-white" onClick={() => action("start")}>
-          Timer starten
+          Start timer
         </button>
       )}
     </div>
