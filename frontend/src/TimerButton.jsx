@@ -30,7 +30,7 @@ export default function TimerButton(){
         `Level ${level} = ${Number(mult).toFixed(1)} Multiplier`,
         `${Math.floor(baseCoins)} x ${Number(mult).toFixed(1)} = ${Number(earned).toFixed(2)}`,
         `Summary of training session: ${formatSeconds(secs)} min, ${Number(earned).toFixed(2)} Coins.`
-      ].join("\n"));
+      ].join("\\n"));
       window.dispatchEvent(new CustomEvent("walletUpdated",{detail:{total:data.wallet_total}}));
     }
   }
@@ -73,7 +73,7 @@ export default function TimerButton(){
       `Level ${level} = ${Number(mult).toFixed(1)} Multiplier`,
       `${Math.floor(baseCoins)} x ${Number(mult).toFixed(1)} = ${Number(earned).toFixed(2)}`,
       `Summary of training session: ${formatSeconds(secs)} min, ${Number(earned).toFixed(2)} Coins.`
-    ].join("\n"));
+    ].join("\\n"));
     setStatus("stopped"); setRemaining(null);
     window.dispatchEvent(new CustomEvent("walletUpdated",{detail:{total:data.wallet_total}}));
   }
