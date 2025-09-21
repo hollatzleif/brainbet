@@ -34,7 +34,10 @@ export default function TimerButton() {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
+      // token invalid -> clear and prompt login
       setStatus("unauth");
+      localStorage.removeItem("access_token");
+      window.dispatchEvent(new Event("storage"));
       return;
     }
     const data = await res.json();
@@ -58,7 +61,7 @@ export default function TimerButton() {
     // handle timer actions and show popup on stop
     const token = getToken();
     if (!token) {
-      alert("Bitte logge dich ein.");
+      setStatus("unauth");
       return;
     }
     const res = await fetch(`${API_BASE}/timers/${path}`, {

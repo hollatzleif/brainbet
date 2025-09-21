@@ -20,6 +20,7 @@ export default function Login() {
   const logout = () => {
     localStorage.removeItem("access_token");
     setToken(null);
+    window.dispatchEvent(new Event("storage"));
   };
 
   const handleSubmit = async (e) => {
