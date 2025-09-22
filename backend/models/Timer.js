@@ -1,20 +1,18 @@
 const { DataTypes } = require('sequelize');
-const { sequelize } = require('../config/database');
-const User = require('./User');
+const sequelize = require('../config/database');
+
+// Debug
+console.log('Timer model loading, sequelize is:', typeof sequelize);
 
 const Timer = sequelize.define('Timer', {
   id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
   userId: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    references: {
-      model: User,
-      key: 'id'
-    }
+    type: DataTypes.UUID,
+    allowNull: false
   },
   startTime: {
     type: DataTypes.DATE,
@@ -24,36 +22,22 @@ const Timer = sequelize.define('Timer', {
     type: DataTypes.DATE,
     allowNull: false
   },
-  pausedTime: {
-    type: DataTypes.INTEGER,
-    defaultValue: 0 // Paused time in seconds
+  pausedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
   },
-  remainingTime: {
+  totalPausedTime: {
     type: DataTypes.INTEGER,
-    allowNull: false // Remaining time in seconds
-  },
-  totalDuration: {
-    type: DataTypes.INTEGER,
-    allowNull: false // Total duration in seconds
+    defaultValue: 0
   },
   status: {
     type: DataTypes.ENUM('active', 'paused', 'completed', 'cancelled'),
     defaultValue: 'active'
   },
-  completedDuration: {
-    type: DataTypes.INTEGER,
-    defaultValue: 0 // Completed duration in seconds
-  },
   earnedCoins: {
     type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0.00
+    defaultValue: 0
   }
-}, {
-  timestamps: true
 });
-
-// Associations
-User.hasMany(Timer, { foreignKey: 'userId', as: 'timers' });
-Timer.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 module.exports = Timer;

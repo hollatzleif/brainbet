@@ -2,13 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
-// Debug: Check if environment variables are loaded
-console.log('Environment Check:');
+// Debug environment
+console.log('Starting server initialization...');
 console.log('NODE_ENV:', process.env.NODE_ENV);
 console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
-console.log('PORT:', process.env.PORT);
+console.log('PORT:', process.env.PORT || 5000);
 
-const sequelize = require('./config/database');
+// Import database and models
+const { sequelize, User, Timer } = require('./models/index');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const timerRoutes = require('./routes/timer');
@@ -67,24 +68,17 @@ app.use((err, req, res, next) => {
 // Database sync and server start
 const startServer = async () => {
   try {
-    // Verify sequelize is properly initialized
-    if (!sequelize || typeof sequelize.authenticate !== 'function') {
-      throw new Error('Sequelize is not properly initialized');
-    }
-
+    console.log('Testing database connection...');
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
 
-    // Import models to ensure they're registered
-    require('./models/User');
-    require('./models/Timer');
-
-    // Sync database
+    console.log('Syncing database models...');
     await sequelize.sync({ alter: true });
     console.log('Database synced successfully.');
 
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
+      console.log(`Health check available at http://localhost:${PORT}/health`);
     });
   } catch (error) {
     console.error('Unable to start server:', error);
@@ -92,5 +86,4 @@ const startServer = async () => {
   }
 };
 
-startServer();
 startServer();

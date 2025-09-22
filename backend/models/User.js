@@ -1,12 +1,15 @@
 const { DataTypes } = require('sequelize');
-const { sequelize } = require('../config/database');
+const sequelize = require('../config/database');
 const bcrypt = require('bcrypt');
+
+// Debug
+console.log('User model loading, sequelize is:', typeof sequelize);
 
 const User = sequelize.define('User', {
   id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true
+    type: DataTypes.UUID,
+    defaultValue: DataTypes.UUIDV4,
+    primaryKey: true
   },
   username: {
     type: DataTypes.STRING(16),
@@ -45,13 +48,12 @@ const User = sequelize.define('User', {
   },
   multiplier: {
     type: DataTypes.DECIMAL(4, 2),
-    defaultValue: 1.0,
+    defaultValue: 1.00,
     validate: {
-      min: 0.1
+      min: 1.00
     }
   }
 }, {
-  timestamps: true,
   hooks: {
     beforeCreate: async (user) => {
       if (user.password) {
@@ -68,14 +70,12 @@ const User = sequelize.define('User', {
   }
 });
 
-// Instance method to validate password
 User.prototype.validatePassword = async function(password) {
   return await bcrypt.compare(password, this.password);
 };
 
-// Instance method to get public profile
 User.prototype.toJSON = function() {
-  const values = { ...this.get() };
+  const values = Object.assign({}, this.get());
   delete values.password;
   return values;
 };
