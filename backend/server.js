@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { sequelize } = require('./models');
+
 
 // Debug environment
 console.log('Starting server initialization...');
@@ -58,6 +60,19 @@ app.get('/', (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date() });
 });
+
+// ⚠️ TEMPORÄR! Danach wieder entfernen.
+app.get('/droptables', async (req, res) => {
+  try {
+    console.log('!! /droptables called – dropping & recreating all Sequelize tables');
+    await sequelize.sync({ force: true }); // droppt ALLE Sequelize-Tabellen und erstellt sie neu
+    return res.json({ ok: true, message: 'All Sequelize tables dropped and recreated from models.' });
+  } catch (err) {
+    console.error('droptables error:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 
 // Error handling middleware
 app.use((err, req, res, next) => {
