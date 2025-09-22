@@ -1,15 +1,14 @@
-// server.js — mount /api/auth and /api/timers; optional middlewares; droptables helper
+// server.js — API prefix + timers alias + temp droptables
 require('dotenv').config();
 
 const express = require('express');
 const app = express();
 
-// Optional middlewares (don't crash if package is missing)
+// Optional middlewares
 let morgan = null;
 try { morgan = require('morgan'); } catch (_) {}
 let cors = null;
 try { cors = require('cors'); } catch (_) {}
-
 if (cors) app.use(cors());
 app.use(express.json());
 if (morgan) app.use(morgan('tiny'));
@@ -18,16 +17,14 @@ if (morgan) app.use(morgan('tiny'));
 const db = require('./models');           // loads backend/models/index.js
 const { sequelize } = db;
 
-// Config
 const PORT = process.env.PORT || 10000;
 
-// Health check (both with and without /api for convenience)
+// Health
 app.get(['/health', '/api/health'], (_req, res) => {
   res.json({ ok: true, env: process.env.NODE_ENV || 'development' });
 });
 
-// ⚠️ TEMPORÄR: einmalig aufrufen, danach löschen!
-// Droppt ALLE Sequelize-Tabellen und erstellt sie neu gemäß den Models (z. B. UUID-IDs)
+// ⚠️ TEMP: einmalig nutzen, dann entfernen
 app.get(['/droptables', '/api/droptables'], async (_req, res) => {
   try {
     console.log('!! /droptables called – dropping & recreating all Sequelize tables');
@@ -42,11 +39,14 @@ app.get(['/droptables', '/api/droptables'], async (_req, res) => {
 // Routes
 const authRoutes = require('./routes/auth');
 const timerRoutes = require('./routes/timers');
-// mounted under /api to match frontend
 app.use('/api/auth', authRoutes);
 app.use('/api/timers', timerRoutes);
+app.use('/api/timer', timerRoutes); // alias (singular) in case frontend uses it
 
-// Bootstrap
+// 404 handler for API
+app.use('/api', (req, res) => res.status(404).json({ ok: false, error: 'API route not found', path: req.path }));
+
+// Boot
 (async () => {
   try {
     console.log('Starting server initialization...');
@@ -54,12 +54,9 @@ app.use('/api/timers', timerRoutes);
     console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
     console.log('PORT:', PORT);
 
-    console.log('Initializing database connection...');
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
 
-    console.log('Syncing database models...');
-    // Use alter to evolve if needed; for a fresh rebuild use /api/droptables once
     await sequelize.sync({ alter: true });
     console.log('Database synced successfully.');
 
