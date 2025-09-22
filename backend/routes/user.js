@@ -1,32 +1,32 @@
 const express = require('express');
 const router = express.Router();
-const authenticate = require('../middleware/auth');
+const authMiddleware = require('../middleware/auth');
 
-// Get current user
-router.get('/me', authenticate, async (req, res) => {
+// Get current user profile
+router.get('/profile', authMiddleware, async (req, res) => {
   try {
     res.json({
       success: true,
       user: req.user.toJSON()
     });
   } catch (error) {
-    console.error('Get user error:', error);
+    console.error('Profile error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      error: 'Failed to fetch profile'
     });
   }
 });
 
-// Update coins (internal use only)
-router.patch('/coins', authenticate, async (req, res) => {
+// Update coins (internal use)
+router.patch('/coins', authMiddleware, async (req, res) => {
   try {
     const { coins } = req.body;
 
     if (typeof coins !== 'number' || coins < 0) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid coins value'
+        error: 'Invalid coins value'
       });
     }
 
@@ -35,13 +35,14 @@ router.patch('/coins', authenticate, async (req, res) => {
 
     res.json({
       success: true,
-      coins: req.user.coins
+      message: 'Coins updated',
+      newBalance: req.user.coins
     });
   } catch (error) {
-    console.error('Update coins error:', error);
+    console.error('Coins update error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error'
+      error: 'Failed to update coins'
     });
   }
 });

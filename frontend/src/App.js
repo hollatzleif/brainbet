@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// TEMPORÄR: Hard-coded URL zum Testen
+const API_URL = 'https://brainbet-4jx2.onrender.com/api';
+
+console.log('App loaded with API_URL:', API_URL); // Debug
 
 // Configure axios defaults
 axios.defaults.baseURL = API_URL;
@@ -13,9 +16,25 @@ axios.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log('Request:', config.method, config.url); // Debug
     return config;
   },
-  error => Promise.reject(error)
+  error => {
+    console.error('Request error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for debugging
+axios.interceptors.response.use(
+  response => {
+    console.log('Response:', response.status, response.data); // Debug
+    return response;
+  },
+  error => {
+    console.error('Response error:', error.response || error); // Debug
+    return Promise.reject(error);
+  }
 );
 
 function App() {
@@ -43,9 +62,22 @@ function App() {
   // Check authentication on mount
   useEffect(() => {
     checkAuth();
+    // Test backend connection
+    testBackendConnection();
   }, []);
 
-  // Poll timer status
+  const testBackendConnection = async () => {
+    try {
+      const response = await fetch(`${API_URL.replace('/api', '')}/health`);
+      const data = await response.json();
+      console.log('Backend health check:', data);
+    } catch (error) {
+      console.error('Backend is not reachable:', error);
+      setMessage('Backend server is not responding. Please try again later.');
+    }
+  };
+
+  // Poll timer status (nur wenn user existiert)
   useEffect(() => {
     if (!user) return;
 
@@ -98,6 +130,8 @@ function App() {
         ? { email: formData.email, password: formData.password }
         : formData;
 
+      console.log('Attempting auth:', endpoint, payload); // Debug
+
       const response = await axios.post(endpoint, payload);
 
       localStorage.setItem('token', response.data.token);
@@ -105,16 +139,32 @@ function App() {
       setMessage('');
       setFormData({ username: '', email: '', password: '' });
     } catch (error) {
-      if (error.response?.data?.errors) {
-        const errorMap = {};
-        error.response.data.errors.forEach(err => {
-          errorMap[err.path] = err.msg;
-        });
-        setErrors(errorMap);
-      } else if (error.response?.data?.error) {
-        setMessage(error.response.data.error);
+      console.error('Full error object:', error); // Debug
+
+      if (error.response) {
+        // Server responded with error
+        console.error('Error response:', error.response.data);
+        console.error('Error status:', error.response.status);
+
+        if (error.response.data?.errors) {
+          const errorMap = {};
+          error.response.data.errors.forEach(err => {
+            errorMap[err.path || err.param] = err.msg;
+          });
+          setErrors(errorMap);
+        } else if (error.response.data?.error) {
+          setMessage(error.response.data.error);
+        } else {
+          setMessage(`Server error: ${error.response.status}`);
+        }
+      } else if (error.request) {
+        // Request made but no response
+        console.error('No response from server:', error.request);
+        setMessage('Cannot connect to server. Please check if the backend is running.');
       } else {
-        setMessage('An error occurred. Please try again.');
+        // Something else happened
+        console.error('Error setting up request:', error.message);
+        setMessage(`Error: ${error.message}`);
       }
     }
   };
@@ -289,11 +339,19 @@ function App() {
               </>
             )}
           </div>
+
+          {/* Debug Info */}
+          <div style={{ marginTop: '2rem', fontSize: '0.75rem', opacity: 0.7 }}>
+            <p>Debug Info:</p>
+            <p>API URL: {API_URL}</p>
+            <p>Check console for more details</p>
+          </div>
         </div>
       </div>
     );
   }
 
+  // Rest des Codes bleibt gleich...
   return (
     <div className="app">
       <header className="header">
