@@ -1,4 +1,4 @@
-// server.js — mount routes under /api to fix 404 from frontend
+// server.js — mount /api/auth and /api/timers; optional middlewares; droptables helper
 require('dotenv').config();
 
 const express = require('express');
@@ -41,8 +41,10 @@ app.get(['/droptables', '/api/droptables'], async (_req, res) => {
 
 // Routes
 const authRoutes = require('./routes/auth');
-// 🔧 IMPORTANT: mount under /api to match frontend API base
+const timerRoutes = require('./routes/timers');
+// mounted under /api to match frontend
 app.use('/api/auth', authRoutes);
+app.use('/api/timers', timerRoutes);
 
 // Bootstrap
 (async () => {
