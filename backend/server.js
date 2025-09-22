@@ -1,14 +1,18 @@
-// server.js — cleaned imports + TEMP /droptables route
+// server.js — cleaned imports + TEMP /droptables route (no hard dep on morgan)
 require('dotenv').config();
 
 const express = require('express');
-const cors = require('cors');
-const morgan = require('morgan');
-
 const app = express();
-app.use(cors());
+
+// Optional middlewares (fail-safe requires)
+let morgan = null;
+try { morgan = require('morgan'); } catch (_) { /* optional */ }
+let cors = null;
+try { cors = require('cors'); } catch (_) { /* optional */ }
+
+if (cors) app.use(cors());
 app.use(express.json());
-app.use(morgan('tiny'));
+if (morgan) app.use(morgan('tiny'));
 
 // ✅ Single source of truth for sequelize & models
 const db = require('./models');           // loads backend/models/index.js
@@ -48,14 +52,13 @@ app.use('/auth', authRoutes);
     console.log('PORT:', PORT);
 
     console.log('Initializing database connection...');
-    // authenticate first
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
 
     console.log('Syncing database models...');
     // Use alter to evolve if needed; for a fresh rebuild use /droptables once
     await sequelize.sync({ alter: true });
-    console.log('Database synced successfully.');
+    console.log('Database synced successfully.')
 
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
