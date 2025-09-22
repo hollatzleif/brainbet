@@ -1,93 +1,59 @@
+// server.js — cleaned imports + TEMP /droptables route
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
-const { sequelize } = require('./models');
-
-
-// Debug environment
-console.log('Starting server initialization...');
-console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
-console.log('PORT:', process.env.PORT || 5000);
-
-// Import database and models
-const { sequelize, User, Timer } = require('./models/index');
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/user');
-const timerRoutes = require('./routes/timer');
+const morgan = require('morgan');
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-
-// Middleware
-app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'https://brainbet.netlify.app',
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
+app.use(cors());
 app.use(express.json());
+app.use(morgan('tiny'));
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/user', userRoutes);
-app.use('/api/timer', timerRoutes);
+// ✅ Single source of truth for sequelize & models
+const db = require('./models');           // loads backend/models/index.js
+const { sequelize } = db;
 
-// Health check
-app.get('/', (req, res) => {
-  res.json({
-    status: 'OK',
-    message: 'Learning Timer API',
-    timestamp: new Date()
-  });
+// Config
+const PORT = process.env.PORT || 10000;
+
+// Health check early
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, env: process.env.NODE_ENV || 'development' });
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date() });
-});
-
-// ⚠️ TEMPORÄR! Danach wieder entfernen.
-app.get('/droptables', async (req, res) => {
+// ⚠️ TEMPORÄR: einmalig aufrufen, danach löschen!
+// Droppt ALLE Sequelize-Tabellen und erstellt sie neu gemäß den Models (z. B. UUID-IDs)
+app.get('/droptables', async (_req, res) => {
   try {
     console.log('!! /droptables called – dropping & recreating all Sequelize tables');
-    await sequelize.sync({ force: true }); // droppt ALLE Sequelize-Tabellen und erstellt sie neu
-    return res.json({ ok: true, message: 'All Sequelize tables dropped and recreated from models.' });
+    await sequelize.sync({ force: true });
+    return res.json({ ok: true, message: 'All Sequelize tables dropped & recreated from models.' });
   } catch (err) {
     console.error('droptables error:', err);
     return res.status(500).json({ ok: false, error: err.message });
   }
 });
 
+// Routes
+const authRoutes = require('./routes/auth');
+app.use('/auth', authRoutes);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ error: 'Something went wrong!', details: err.message });
-});
-
-// Database sync and server start
-const startServer = async () => {
+// Bootstrap (auth + sync + listen), with logs similar to your previous version
+(async () => {
   try {
-    console.log('Testing database connection...');
+    console.log('Starting server initialization...');
+    console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
+    console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
+    console.log('PORT:', PORT);
+
+    console.log('Initializing database connection...');
+    // authenticate first
     await sequelize.authenticate();
     console.log('Database connection established successfully.');
 
     console.log('Syncing database models...');
+    // Use alter to evolve if needed; for a fresh rebuild use /droptables once
     await sequelize.sync({ alter: true });
     console.log('Database synced successfully.');
 
@@ -95,10 +61,10 @@ const startServer = async () => {
       console.log(`Server is running on port ${PORT}`);
       console.log(`Health check available at http://localhost:${PORT}/health`);
     });
-  } catch (error) {
-    console.error('Unable to start server:', error);
+  } catch (err) {
+    console.error('Fatal startup error:', err);
     process.exit(1);
   }
-};
+})();
 
-startServer();
+module.exports = app;
