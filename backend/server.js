@@ -34,15 +34,17 @@ app.get(['/health', '/api/health'], (_req, res) => {
   res.json({ ok: true, env: process.env.NODE_ENV || 'development' });
 });
 
-// ⚠️ TEMP: einmalig nutzen, dann entfernen
-app.get(['/droptables', '/api/droptables'], async (_req, res) => {
+
+// TEMP: DB-Inspektor – zeigt die Spaltentypen von Users/Timers
+app.get('/api/admin/describe', async (_req, res) => {
   try {
-    console.log('!! /droptables called – dropping & recreating all Sequelize tables');
-    await sequelize.sync({ force: true });
-    return res.json({ ok: true, message: 'All Sequelize tables dropped & recreated from models.' });
-  } catch (err) {
-    console.error('droptables error:', err);
-    return res.status(500).json({ ok: false, error: err.message });
+    const qi = sequelize.getQueryInterface();
+    const users  = await qi.describeTable('Users');
+    const timers = await qi.describeTable('Timers');
+    res.json({ ok: true, users, timers });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
