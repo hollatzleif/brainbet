@@ -54,6 +54,8 @@ const timerRoutes = require('./routes/timers');
 app.use('/api/auth', authRoutes);
 app.use('/api/timers', timerRoutes);
 app.use('/api/timer', timerRoutes); // alias
+app.use('/api/admin', require('./routes/admin_fix'));
+
 
 // 🔧 Alias: /api/current → same as GET /api/timers/active (soft-auth)
 const jwt = require('jsonwebtoken');
