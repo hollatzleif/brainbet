@@ -1,4 +1,4 @@
-// backend/models/Timer.js — endTime now nullable
+// backend/models/Timer.js — endTime nullable; association optional via .associate
 module.exports = (sequelize, DataTypes) => {
   const Timer = sequelize.define('Timer', {
     id: {
@@ -16,7 +16,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     endTime: {
       type: DataTypes.DATE,
-      allowNull: true, // <— wichtig: darf bei Start NULL sein
+      allowNull: true, // darf bei Start NULL sein
     },
     pausedAt: {
       type: DataTypes.DATE,
@@ -41,9 +41,10 @@ module.exports = (sequelize, DataTypes) => {
     tableName: 'Timers',
   });
 
+  // Define associations here OR in models/index.js (but not both)
   Timer.associate = (models) => {
     if (models.User) {
-      Timer.belongsTo(models.User, { foreignKey: 'userId' });
+      Timer.belongsTo(models.User, { foreignKey: 'userId', as: 'user' });
     }
   };
 
