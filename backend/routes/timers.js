@@ -1,13 +1,18 @@
-// routes/timers.js — robust timer endpoints
+// routes/timers.js — robust timer endpoints with diagnostics
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { Timer } = require('../models');
 
-// Extract userId from JWT payload (supports id or userId)
+// Extract userId from JWT payload (supports nested)
 function extractUserId(payload) {
   if (!payload || typeof payload !== 'object') return null;
-  return payload.id || payload.userId || payload.userID || payload.uid || null;
+  const direct = payload.id || payload.userId || payload.userID || payload.uid || payload.sub || null;
+  if (direct) return direct;
+  const nested = (payload.user && (payload.user.id || payload.user.userId)) ||
+                 (payload.data && (payload.data.id || payload.data.userId)) ||
+                 null;
+  return nested;
 }
 
 // Build attribute map from model definition for flexible column names
@@ -26,53 +31,55 @@ function getAttrMap() {
   };
 }
 
-// Minimal JWT auth middleware. Expects Authorization: Bearer <token>
-function auth(req, res, next) {
+// Minimal JWT auth verification used inline
+function verifyTokenFromHeader(req) {
+  const header = req.headers['authorization'] || '';
+  const parts = header.split(' ');
+  const token = parts.length === 2 && /^Bearer$/i.test(parts[0]) ? parts[1] : null;
+  if (!token) return { ok: false, error: 'Missing token' };
+  const secret = process.env.JWT_SECRET || 'secret';
   try {
-    const header = req.headers['authorization'] || '';
-    const parts = header.split(' ');
-    const token = parts.length === 2 && /^Bearer$/i.test(parts[0]) ? parts[1] : null;
-    if (!token) return res.status(401).json({ ok: false, error: 'Missing token' });
-    const secret = process.env.JWT_SECRET || 'secret';
     const payload = jwt.verify(token, secret);
-    req.user = payload;
-    next();
-  } catch (err) {
-    return res.status(401).json({ ok: false, error: 'Invalid token' });
+    return { ok: true, payload };
+  } catch (e) {
+    const decoded = jwt.decode(token) || {};
+    console.warn('JWT verify failed:', e.message, 'decoded keys:', Object.keys(decoded));
+    return { ok: false, error: 'Invalid token (signature)', decodedKeys: Object.keys(decoded) };
   }
 }
 
-// Helper: find active timer (no endTime) for user using dynamic field names
-async function findActiveTimer(userId, map) {
-  const where = {};
-  where[map.userId] = userId;
-  where[map.endTime] = null;
-  return await Timer.findOne({ where });
-}
-
-// Debug route: show server-side view (no secrets)
-router.get('/debug', auth, async (req, res) => {
-  try {
-    const map = getAttrMap();
-    const payload = req.user;
-    const userId = extractUserId(payload);
-    return res.json({ ok: true, attrMap: map, tokenPayloadKeys: Object.keys(payload || {}), userId });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
-  }
+// Debug route: show mapping and token keys
+router.get('/debug', async (req, res) => {
+  const map = getAttrMap();
+  const v = verifyTokenFromHeader(req);
+  const payload = v.ok ? v.payload : {};
+  const userId = extractUserId(payload);
+  return res.json({ ok: true, attrMap: map, tokenCheck: v, userId });
 });
 
-// POST /api/timers/start
-router.post('/start', auth, async (req, res) => {
+// Accept both GET and POST for start/stop (frontend mismatch safe)
+function routeAll(path, handler) {
+  router.get(path, handler);
+  router.post(path, handler);
+}
+
+// /api/timers/start
+routeAll('/start', async (req, res) => {
   try {
+    const v = verifyTokenFromHeader(req);
+    if (!v.ok) return res.status(401).json(v);
+
     const map = getAttrMap();
-    const userId = extractUserId(req.user);
-    if (!userId) return res.status(400).json({ ok: false, error: 'Missing user id in token payload' });
+    const userId = extractUserId(v.payload);
+    if (!userId) return res.status(400).json({ ok: false, error: 'Missing user id in token payload', tokenPayload: v.payload });
 
     // prevent multiple concurrent timers
-    const existing = await findActiveTimer(userId, map);
+    const whereActive = {};
+    whereActive[map.userId] = userId;
+    whereActive[map.endTime] = null;
+    const existing = await Timer.findOne({ where: whereActive });
     if (existing) {
-      return res.status(400).json({ ok: false, error: 'A timer is already running' });
+      return res.status(400).json({ ok: false, error: 'A timer is already running', timer: existing });
     }
 
     const now = new Date();
@@ -86,18 +93,24 @@ router.post('/start', auth, async (req, res) => {
     return res.json({ ok: true, timer });
   } catch (err) {
     console.error('start timer error:', err);
-    return res.status(500).json({ ok: false, error: 'Failed to start timer' });
+    return res.status(500).json({ ok: false, error: 'Failed to start timer', details: err.message });
   }
 });
 
-// POST /api/timers/stop
-router.post('/stop', auth, async (req, res) => {
+// /api/timers/stop
+routeAll('/stop', async (req, res) => {
   try {
-    const map = getAttrMap();
-    const userId = extractUserId(req.user);
-    if (!userId) return res.status(400).json({ ok: false, error: 'Missing user id in token payload' });
+    const v = verifyTokenFromHeader(req);
+    if (!v.ok) return res.status(401).json(v);
 
-    const t = await findActiveTimer(userId, map);
+    const map = getAttrMap();
+    const userId = extractUserId(v.payload);
+    if (!userId) return res.status(400).json({ ok: false, error: 'Missing user id in token payload', tokenPayload: v.payload });
+
+    const whereActive = {};
+    whereActive[map.userId] = userId;
+    whereActive[map.endTime] = null;
+    const t = await Timer.findOne({ where: whereActive });
     if (!t) {
       return res.status(400).json({ ok: false, error: 'No active timer' });
     }
@@ -111,17 +124,24 @@ router.post('/stop', auth, async (req, res) => {
     return res.json({ ok: true, timer: t });
   } catch (err) {
     console.error('stop timer error:', err);
-    return res.status(500).json({ ok: false, error: 'Failed to stop timer' });
+    return res.status(500).json({ ok: false, error: 'Failed to stop timer', details: err.message });
   }
 });
 
 // GET /api/timers/active
-router.get('/active', auth, async (req, res) => {
+router.get('/active', async (req, res) => {
   try {
+    const v = verifyTokenFromHeader(req);
+    const payload = v.ok ? v.payload : null;
     const map = getAttrMap();
-    const userId = extractUserId(req.user);
-    const t = userId ? await findActiveTimer(userId, map) : null;
-    return res.json({ ok: true, active: !!t, timer: t || null });
+    const userId = extractUserId(payload);
+    const whereActive = {};
+    if (userId) {
+      whereActive[map.userId] = userId;
+      whereActive[map.endTime] = null;
+    }
+    const t = userId ? await Timer.findOne({ where: whereActive }) : null;
+    return res.json({ ok: true, active: !!t, timer: t || null, auth: v.ok });
   } catch (err) {
     console.error('active timer error:', err);
     return res.status(500).json({ ok: false, error: 'Failed to fetch active timer' });
@@ -129,11 +149,14 @@ router.get('/active', auth, async (req, res) => {
 });
 
 // GET /api/timers/mine
-router.get('/mine', auth, async (req, res) => {
+router.get('/mine', async (req, res) => {
   try {
+    const v = verifyTokenFromHeader(req);
+    if (!v.ok) return res.status(401).json(v);
+
     const map = getAttrMap();
-    const userId = extractUserId(req.user);
-    if (!userId) return res.status(400).json({ ok: false, error: 'Missing user id in token payload' });
+    const userId = extractUserId(v.payload);
+    if (!userId) return res.status(400).json({ ok: false, error: 'Missing user id in token payload', tokenPayload: v.payload });
 
     const where = {};
     where[map.userId] = userId;

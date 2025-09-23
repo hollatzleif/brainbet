@@ -1,4 +1,4 @@
-// server.js — API prefix + timers alias + temp droptables
+// server.js — API prefix + timers alias + temp droptables + manual CORS fallback
 require('dotenv').config();
 
 const express = require('express');
@@ -10,6 +10,16 @@ try { morgan = require('morgan'); } catch (_) {}
 let cors = null;
 try { cors = require('cors'); } catch (_) {}
 if (cors) app.use(cors());
+
+// Manual CORS fallback (in case 'cors' package is missing)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 app.use(express.json());
 if (morgan) app.use(morgan('tiny'));
 
@@ -41,7 +51,7 @@ const authRoutes = require('./routes/auth');
 const timerRoutes = require('./routes/timers');
 app.use('/api/auth', authRoutes);
 app.use('/api/timers', timerRoutes);
-app.use('/api/timer', timerRoutes); // alias (singular) in case frontend uses it
+app.use('/api/timer', timerRoutes); // alias
 
 // 404 handler for API
 app.use('/api', (req, res) => res.status(404).json({ ok: false, error: 'API route not found', path: req.path }));
