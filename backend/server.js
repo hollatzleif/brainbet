@@ -1,6 +1,6 @@
-// server.js — API prefix + timers alias + temp droptables + manual CORS fallback
+// server.js — adds /api/current alias to active timer; keeps /api/timers/*
+// (manual CORS fallback included)
 require('dotenv').config();
-
 const express = require('express');
 const app = express();
 
@@ -11,7 +11,7 @@ let cors = null;
 try { cors = require('cors'); } catch (_) {}
 if (cors) app.use(cors());
 
-// Manual CORS fallback (in case 'cors' package is missing)
+// Manual CORS fallback
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -25,7 +25,7 @@ if (morgan) app.use(morgan('tiny'));
 
 // ✅ Single source of truth for sequelize & models
 const db = require('./models');           // loads backend/models/index.js
-const { sequelize } = db;
+const { sequelize, Timer } = db;
 
 const PORT = process.env.PORT || 10000;
 
@@ -52,6 +52,42 @@ const timerRoutes = require('./routes/timers');
 app.use('/api/auth', authRoutes);
 app.use('/api/timers', timerRoutes);
 app.use('/api/timer', timerRoutes); // alias
+
+// 🔧 Alias: /api/current → same as GET /api/timers/active (soft-auth)
+const jwt = require('jsonwebtoken');
+function extractUserId(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  return payload.id || payload.userId || payload.userID || payload.uid || payload.sub ||
+         (payload.user && (payload.user.id || payload.user.userId)) ||
+         (payload.data && (payload.data.id || payload.data.userId)) || null;
+}
+app.get('/api/current', async (req, res) => {
+  try {
+    const header = req.headers['authorization'] || '';
+    const parts = header.split(' ');
+    const token = parts.length === 2 && /^Bearer$/i.test(parts[0]) ? parts[1] : null;
+    let payload = null;
+    if (token) {
+      try { payload = jwt.verify(token, process.env.JWT_SECRET || 'secret'); } catch (_) {}
+    }
+    const userId = extractUserId(payload);
+    // map fields from model
+    const attrs = Timer.rawAttributes || {};
+    const userIdKey = attrs.userId ? 'userId' : (attrs.user_id ? 'user_id' : 'UserId');
+    const endKey = attrs.endTime ? 'endTime' : (attrs.end_time ? 'end_time' : 'end');
+    let timer = null;
+    if (userId) {
+      const where = {};
+      where[userIdKey] = userId;
+      where[endKey] = null;
+      timer = await Timer.findOne({ where });
+    }
+    return res.json({ ok: true, active: !!timer, timer });
+  } catch (err) {
+    console.error('alias /api/current error:', err);
+    return res.status(500).json({ ok: false, error: 'Failed to fetch current timer' });
+  }
+});
 
 // 404 handler for API
 app.use('/api', (req, res) => res.status(404).json({ ok: false, error: 'API route not found', path: req.path }));
